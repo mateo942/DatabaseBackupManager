@@ -3,8 +3,10 @@ using BackupManager.Notification;
 using BackupManager.Pipelines;
 using BackupManager.Settings;
 using MediatR;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -27,40 +29,18 @@ namespace BackupManager
 
         static void Main(string[] args)
         {
+            var configuration = new ConfigurationBuilder()
+                .AddJsonFile("config.json", false)
+                .Build();
+
             var serviceCollection = new ServiceCollection();
             serviceCollection.AddMediatR(typeof(Program).Assembly);
+            serviceCollection.AddOptions();
+            serviceCollection.Configure<BackupSettings>(configuration.GetSection("BackupSettings"));
             serviceCollection.AddLogging(cfg =>
             {
                 cfg.SetMinimumLevel(LogLevel.Trace);
                 cfg.AddConsole();
-            });
-            serviceCollection.AddSingleton<BackupSettings>(new BackupSettings
-            {
-                BackupDatabases = new List<BackupDatabase>
-                {
-                    new BackupDatabase
-                    {
-                        ConnectionString = "Server=.;Database=APP_MASTER;Trusted_Connection=True;",
-                        Name = "APP_MASTER",
-                        OutputDirectory = @"F:\TestBackup\diff",
-                        Pipeline = new[] { "BACKUP", "ZIP", "DELETE_FILE", "DELETE_OLD_FILE", "MAIL" },
-                        Type = BackupType.Diff,
-                        Cron = "* * * * *",
-                        BackupProvider = new BackupProvider
-                        {
-                            
-                        }
-                    },
-                    new BackupDatabase
-                    {
-                        ConnectionString = "Server=.;Database=APP_MASTER;Trusted_Connection=True;",
-                        Name = "APP_MASTER",
-                        OutputDirectory = @"F:\TestBackup\full",
-                        Pipeline = new[] { "BACKUP" },
-                        Type = BackupType.Full,
-                        Cron = "*/2 * * * *"
-                    }
-                }
             });
             serviceCollection.AddTransient<MsSQLBackupPipeline>();
             serviceCollection.AddTransient<ZipPipeline>();
@@ -79,31 +59,28 @@ namespace BackupManager
 
             var provider = serviceCollection.BuildServiceProvider();
 
-            var tcpBackupManager = provider.GetRequiredService<TcpBackupManager>();
-            tcpBackupManager.Start();
-
-            var settings = provider.GetRequiredService<BackupSettings>();
+            var settings = provider.GetRequiredService<IOptions<BackupSettings>>().Value;
             var cronDeamon = provider.GetRequiredService<ICronDaemon>();
             cronDeamon.Start();
 
             foreach (var item in settings.BackupDatabases)
             {
-                var setup = new PipelineSetup();
+                //var setup = new PipelineSetup();
 
-                BuildStage(setup, item);
+                //BuildStage(setup, item);
 
-                var pipelineManager = provider.GetService<PipelineManger>();
-                pipelineManager.Execute(setup, default(CancellationToken)).ConfigureAwait(true);
+                //var pipelineManager = provider.GetService<PipelineManger>();
+                //pipelineManager.Execute(setup, default(CancellationToken)).ConfigureAwait(true);
 
-                //cronDeamon.AddJob(item.Cron, async () =>
-                //{
-                //    var setup = new PipelineSetup();
+                cronDeamon.AddJob(item.Cron, async () =>
+                {
+                    var setup = new PipelineSetup();
 
-                //    BuildStage(setup, item);
+                    BuildStage(setup, item);
 
-                //    var pipelineManager = provider.GetService<PipelineManger>();
-                //    await pipelineManager.Execute(setup, default(CancellationToken));
-                //});
+                    var pipelineManager = provider.GetService<PipelineManger>();
+                    await pipelineManager.Execute(setup, default(CancellationToken));
+                });
             }
 
             Console.ReadKey(true);

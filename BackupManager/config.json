@@ -1,0 +1,46 @@
+﻿{
+  "BackupSettings": {
+    "BackupDatabases": [
+      {
+        "ConnectionString": "Server=.;Database=APP_MASTER;Trusted_Connection=True;",
+        "Name": "App_MASTER",
+        "OutputDirectory": "F:\\TestBackup\\diff",
+        "Pipeline": [ "BACKUP", "ZIP", "DELETE_FILE", "DELETE_OLD_FILE", "MAIL" ],
+        "Type": 1,
+        "Cron": "* * * * *",
+        "BackupProvider": {
+          "FtpProvider": {},
+          "TcpProvider": {},
+          "MailProvider": {
+            "Host": "smtp.mailtrap.io",
+            "Port": 587,
+            "Username": "",
+            "Password": "",
+            "FromMail": "example@backupapp.com",
+            "ToMail": "example@backupapp.com"
+          }
+        }
+      },
+      {
+        "ConnectionString": "Server=.;Database=APP_MASTER;Trusted_Connection=True;",
+        "Name": "App_MASTER",
+        "OutputDirectory": "F:\\TestBackup\\full",
+        "Pipeline": [ "BACKUP", "ZIP", "DELETE_FILE", "DELETE_OLD_FILE", "MAIL" ],
+        "Type": 0,
+        "Cron": "*/2 * * * *",
+        "BackupProvider": {
+          "FtpProvider": {},
+          "TcpProvider": {},
+          "MailProvider": {
+            "Host": "smtp.mailtrap.io",
+            "Port": 587,
+            "Username": "",
+            "Password": "",
+            "FromMail": "example@backupapp.com",
+            "ToMail": "example@backupapp.com"
+          }
+        }
+      }
+    ]
+  }
+}
