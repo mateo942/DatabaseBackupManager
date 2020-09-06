@@ -37,6 +37,7 @@ namespace BackupManager.Settings
         public FtpProvider FtpProvider { get; set; }
         //TCP
         public TcpProvider TcpProvider { get; set; }
+        public MailProvider MailProvider { get; set; }
     }
 
     public class FtpProvider
@@ -56,5 +57,17 @@ namespace BackupManager.Settings
         public int Port { get; set; }
 
         public string ApiKey { get; set; }
+    }
+
+    public class MailProvider
+    {
+        public string Host { get; set; }
+        public int Port { get; set; }
+        public string Username { get; set; }
+        public string Password { get; set; }
+
+        public string FromMail { get; set; }
+        public string ToMail { get; set; }
+
     }
 }

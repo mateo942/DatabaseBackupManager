@@ -11,10 +11,27 @@ namespace BackupManager.Pipelines
         public const string BACKUP_PATH = "backup_path";
         public const string FILES_TO_DELETE = "files_to_delete";
         public const string FILES_TO_UPLOAD = "files_to_upload";
+        public const string DATE_START = "date_start";
+        public const string UPLOAD_TO = "upload_to";
+
+        public Variables()
+        {
+            this[DATE_START] = DateTime.UtcNow;
+        }
     }
 
     public static class VariablesExtensions
     {
+        public static DateTime GetDateStart(this Variables source)
+        {
+            if (source.TryGetValue(Variables.DATE_START, out object t))
+            {
+                return (DateTime)t;
+            }
+
+            return DateTime.MinValue;
+        }
+
         public static string SetBackupPath(this Variables source, string value)
         {
             source[Variables.BACKUP_PATH] = value;
@@ -101,6 +118,34 @@ namespace BackupManager.Pipelines
             }
 
             list.RemoveAll(predicate);
+
+            return list.AsEnumerable();
+        }
+
+        public static IEnumerable<string> GetUploadTo(this Variables source)
+        {
+            if (source.TryGetValue(Variables.UPLOAD_TO, out object t))
+            {
+                return t as IEnumerable<string>;
+            }
+
+            return Enumerable.Empty<string>();
+        }
+
+        public static IEnumerable<string> AddUploadTo(this Variables source, string value)
+        {
+            List<string> list;
+            if (source.TryGetValue(Variables.UPLOAD_TO, out object t))
+            {
+                list = t as List<string>;
+            }
+            else
+            {
+                list = new List<string>();
+                source[Variables.UPLOAD_TO] = list;
+            }
+
+            list.Add(value);
 
             return list.AsEnumerable();
         }

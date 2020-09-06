@@ -44,9 +44,12 @@ namespace BackupManager.Pipelines
                         var fileName = Path.GetFileName(item);
                         _logger.LogInformation("Uploading: {0} ...", fileName);
                         await client.UploadFileAsync(item, ftpSettings.Folder);
+
                     }
 
-                } catch(Exception ex)
+                    variables.AddUploadTo("FTP");
+                }
+                catch (Exception ex)
                 {
                     _logger.LogError(ex, "Error upload file via FTP");
                 }

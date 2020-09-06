@@ -21,7 +21,8 @@ namespace BackupManager
             { "ZIP", typeof(ZipPipeline) },
             { "DELETE_FILE", typeof(DeleteFilePipeline) },
             { "DELETE_OLD_FILE", typeof(DeleteOldFilesPipeline) },
-            { "FTP", typeof(FtpPipeline) }
+            { "FTP", typeof(FtpPipeline) },
+            { "MAIL", typeof(MailPipeline) }
         };
 
         static void Main(string[] args)
@@ -42,9 +43,13 @@ namespace BackupManager
                         ConnectionString = "Server=.;Database=APP_MASTER;Trusted_Connection=True;",
                         Name = "APP_MASTER",
                         OutputDirectory = @"F:\TestBackup\diff",
-                        Pipeline = new[] { "BACKUP", "ZIP", "DELETE_FILE", "DELETE_OLD_FILE" },
+                        Pipeline = new[] { "BACKUP", "ZIP", "DELETE_FILE", "DELETE_OLD_FILE", "MAIL" },
                         Type = BackupType.Diff,
-                        Cron = "* * * * *"
+                        Cron = "* * * * *",
+                        BackupProvider = new BackupProvider
+                        {
+                            
+                        }
                     },
                     new BackupDatabase
                     {
@@ -62,6 +67,7 @@ namespace BackupManager
             serviceCollection.AddTransient<DeleteFilePipeline>();
             serviceCollection.AddTransient<DeleteOldFilesPipeline>();
             serviceCollection.AddTransient<FtpPipeline>();
+            serviceCollection.AddTransient<MailPipeline>();
 
             serviceCollection.AddTransient<DumpNotificationHandler>();
 
