@@ -12,6 +12,7 @@ namespace BackupManager.Pipelines
     public class PipelineSetup
     {
         private readonly IList<KeyValuePair<Type, IPipelineCommand>> _pipelines = new List<KeyValuePair<Type, IPipelineCommand>>();
+        public IDictionary<string, string> Variables { get; private set; }
 
         internal int index;
 
@@ -27,6 +28,13 @@ namespace BackupManager.Pipelines
             var t = typeof(IPipeline);
 
             return AddStage(t, command);
+        }
+
+        public PipelineSetup AddVariables(IDictionary<string, string> variables)
+        {
+            Variables = variables;
+
+            return this;
         }
 
         internal KeyValuePair<Type, IPipelineCommand>? Next()
@@ -57,6 +65,7 @@ namespace BackupManager.Pipelines
             using (var scope = _serviceProvider.CreateScope())
             {
                 Variables variables = new Variables();
+                variables.AddRange(pipelineSetup.Variables);
 
                 KeyValuePair<Type, IPipelineCommand>? pipeline;
                 while ((pipeline = pipelineSetup.Next()) != null)

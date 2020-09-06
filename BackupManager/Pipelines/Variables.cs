@@ -13,10 +13,22 @@ namespace BackupManager.Pipelines
         public const string FILES_TO_UPLOAD = "files_to_upload";
         public const string DATE_START = "date_start";
         public const string UPLOAD_TO = "upload_to";
+        public const string MOVE_FILES_TO = "move_files_to";
 
         public Variables()
         {
             this[DATE_START] = DateTime.UtcNow;
+        }
+
+        public void AddRange(IDictionary<string, string> v)
+        {
+            if (v == null)
+                return;
+
+            foreach (var item in v)
+            {
+                this.TryAdd(item.Key, item.Value);
+            }
         }
     }
 
@@ -148,6 +160,16 @@ namespace BackupManager.Pipelines
             list.Add(value);
 
             return list.AsEnumerable();
+        }
+
+        public static string GetMoveOutputPath(this Variables source)
+        {
+            if (source.TryGetValue(Variables.MOVE_FILES_TO, out object t))
+            {
+                return t as string;
+            }
+
+            return null;
         }
     }
 }

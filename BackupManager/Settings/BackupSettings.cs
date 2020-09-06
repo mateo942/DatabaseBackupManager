@@ -25,6 +25,7 @@ namespace BackupManager.Settings
         public BackupType Type { get; set; }
         public string Cron { get; set; }
         public int FileExpireDays { get; set; }
+        public IDictionary<string, string> Variables { get; set; }
 
         public BackupProvider BackupProvider { get; set; }
 

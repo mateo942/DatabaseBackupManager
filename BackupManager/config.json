@@ -5,9 +5,12 @@
         "ConnectionString": "Server=.;Database=APP_MASTER;Trusted_Connection=True;",
         "Name": "App_MASTER",
         "OutputDirectory": "F:\\TestBackup\\diff",
-        "Pipeline": [ "BACKUP", "ZIP", "DELETE_FILE", "DELETE_OLD_FILE", "MAIL" ],
+        "Pipeline": [ "BACKUP", "ZIP", "DELETE_FILE", "DELETE_OLD_FILE", "MAIL", "MOVE" ],
         "Type": 1,
         "Cron": "* * * * *",
+        "Variables": {
+          "move_files_to": "F:\\TestBackup"
+        },
         "BackupProvider": {
           "FtpProvider": {},
           "TcpProvider": {},

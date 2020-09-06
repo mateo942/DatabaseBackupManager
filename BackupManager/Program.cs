@@ -24,7 +24,8 @@ namespace BackupManager
             { "DELETE_FILE", typeof(DeleteFilePipeline) },
             { "DELETE_OLD_FILE", typeof(DeleteOldFilesPipeline) },
             { "FTP", typeof(FtpPipeline) },
-            { "MAIL", typeof(MailPipeline) }
+            { "MAIL", typeof(MailPipeline) },
+            { "MOVE", typeof(MoveFilePipeline) }
         };
 
         static void Main(string[] args)
@@ -48,6 +49,7 @@ namespace BackupManager
             serviceCollection.AddTransient<DeleteOldFilesPipeline>();
             serviceCollection.AddTransient<FtpPipeline>();
             serviceCollection.AddTransient<MailPipeline>();
+            serviceCollection.AddTransient<MoveFilePipeline>();
 
             serviceCollection.AddTransient<DumpNotificationHandler>();
 
@@ -65,17 +67,15 @@ namespace BackupManager
 
             foreach (var item in settings.BackupDatabases)
             {
-                //var setup = new PipelineSetup();
+                var setup = new PipelineSetup();
+                BuildStage(setup, item);
 
-                //BuildStage(setup, item);
-
-                //var pipelineManager = provider.GetService<PipelineManger>();
-                //pipelineManager.Execute(setup, default(CancellationToken)).ConfigureAwait(true);
+                var pipelineManager = provider.GetService<PipelineManger>();
+                pipelineManager.Execute(setup, default(CancellationToken)).ConfigureAwait(true);
 
                 cronDeamon.AddJob(item.Cron, async () =>
                 {
                     var setup = new PipelineSetup();
-
                     BuildStage(setup, item);
 
                     var pipelineManager = provider.GetService<PipelineManger>();
@@ -91,6 +91,8 @@ namespace BackupManager
 
         static PipelineSetup BuildStage(PipelineSetup pipelineSetup, BackupDatabase settings)
         {
+            pipelineSetup.AddVariables(settings.Variables);
+
             foreach (var item in settings.Pipeline)
             {
                 if (_pipelines.ContainsKey(item) == false)
