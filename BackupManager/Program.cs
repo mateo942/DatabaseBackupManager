@@ -35,9 +35,23 @@ namespace BackupManager
                 .Build();
 
             var serviceCollection = new ServiceCollection();
+            Configure(serviceCollection, configuration);
+
+            var provider = serviceCollection.BuildServiceProvider();
+            Run(provider);
+
+            Console.ReadKey(true);
+
+            provider.Dispose();
+        }
+
+        static void Configure(ServiceCollection serviceCollection, IConfigurationRoot configuration)
+        {
             serviceCollection.AddMediatR(typeof(Program).Assembly);
+
             serviceCollection.AddOptions();
             serviceCollection.Configure<BackupSettings>(configuration.GetSection("BackupSettings"));
+
             serviceCollection.AddLogging(cfg =>
             {
                 cfg.SetMinimumLevel(LogLevel.Trace);
@@ -58,9 +72,10 @@ namespace BackupManager
 
             serviceCollection.AddSingleton<PipelineManger>();
             serviceCollection.AddSingleton<ICronDaemon, CronDaemon>();
+        }
 
-            var provider = serviceCollection.BuildServiceProvider();
-
+        static void Run(IServiceProvider provider)
+        {
             var settings = provider.GetRequiredService<IOptions<BackupSettings>>().Value;
             var cronDeamon = provider.GetRequiredService<ICronDaemon>();
             cronDeamon.Start();
@@ -82,11 +97,6 @@ namespace BackupManager
                     await pipelineManager.Execute(setup, default(CancellationToken));
                 });
             }
-
-            Console.ReadKey(true);
-            cronDeamon.Stop();
-
-            provider.Dispose();
         }
 
         static PipelineSetup BuildStage(PipelineSetup pipelineSetup, BackupDatabase settings)

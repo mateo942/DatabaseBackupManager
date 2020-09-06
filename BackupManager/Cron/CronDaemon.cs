@@ -15,7 +15,7 @@ namespace BackupManager.Cron
         void Stop();
     }
 
-    public class CronDaemon : ICronDaemon
+    public class CronDaemon : ICronDaemon, IDisposable
     {
         private readonly System.Timers.Timer timer = new System.Timers.Timer(30000);
         private readonly List<ICronJob> cron_jobs = new List<ICronJob>();
@@ -61,6 +61,11 @@ namespace BackupManager.Cron
                 _last = DateTime.Now;
                 Parallel.ForEach(cron_jobs, x => x.Execute(DateTime.Now));
             }
+        }
+
+        public void Dispose()
+        {
+            Stop();
         }
     }
 }
