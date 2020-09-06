@@ -19,6 +19,7 @@ namespace BackupManager.Settings
 
     public class BackupDatabase: IPipelineCommand
     {
+        public string Id { get; set; }
         public string ConnectionString { get; set; }
         public string Name { get; set; }
         public string OutputDirectory { get; set; }

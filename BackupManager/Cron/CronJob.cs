@@ -42,7 +42,7 @@ namespace BackupManager.Cron
 
         public void Abort()
         {
-            _thread.Abort();
+            //TODO: ???
         }
 
     }

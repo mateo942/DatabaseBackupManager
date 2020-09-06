@@ -2,6 +2,7 @@
 using BackupManager.Notification;
 using BackupManager.Pipelines;
 using BackupManager.Settings;
+using CommandLine;
 using MediatR;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,10 +13,52 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Topshelf;
 
 namespace BackupManager
 {
     class Program
+    {
+
+        static void Main(string[] args)
+        {
+            Parser.Default.ParseArguments<Options>(args)
+                .WithParsed<Options>(opt =>
+              {
+                  if (string.IsNullOrEmpty(opt.BackupId))
+                  {
+                      if (opt.RunAsService)
+                      {
+                          HostFactory.Run(cfg =>
+                          {
+                              cfg.SetDisplayName("Database Backup");
+                              cfg.SetDescription("Database Backup");
+                              cfg.SetServiceName("Database Backup");
+                              cfg.Service<Wrapper>(s =>
+                              {
+                                  s.ConstructUsing(x => new Wrapper());
+                                  s.WhenStarted(x => { x.Start(); x.RunInCron(); });
+                                  s.WhenStopped(x => x.Stop());
+                              });
+
+                              cfg.AddCommandLineDefinition("s", x => { });
+                          });
+                      } else
+                      {
+                          new Wrapper().Start().RunInCron();
+
+                          if (Environment.UserInteractive)
+                              Console.ReadKey(true);
+                      }
+                  } else
+                  {
+                      new Wrapper().Start().RunOne(opt.BackupId);
+                  }
+              });
+        }
+    }
+
+    class Wrapper
     {
         readonly static IDictionary<string, Type> _pipelines = new Dictionary<string, Type>()
         {
@@ -28,24 +71,33 @@ namespace BackupManager
             { "MOVE", typeof(MoveFilePipeline) }
         };
 
-        static void Main(string[] args)
+        private ServiceProvider provider;
+
+        public Wrapper()
+        {
+
+        }
+
+        public Wrapper Start()
         {
             var configuration = new ConfigurationBuilder()
-                .AddJsonFile("config.json", false)
-                .Build();
+               .AddJsonFile("config.json", false)
+               .Build();
 
             var serviceCollection = new ServiceCollection();
             Configure(serviceCollection, configuration);
 
-            var provider = serviceCollection.BuildServiceProvider();
-            Run(provider);
+            provider = serviceCollection.BuildServiceProvider();
 
-            Console.ReadKey(true);
+            return this;
+        }
 
+        public void Stop()
+        {
             provider.Dispose();
         }
 
-        static void Configure(ServiceCollection serviceCollection, IConfigurationRoot configuration)
+        void Configure(ServiceCollection serviceCollection, IConfigurationRoot configuration)
         {
             serviceCollection.AddMediatR(typeof(Program).Assembly);
 
@@ -74,7 +126,22 @@ namespace BackupManager
             serviceCollection.AddSingleton<ICronDaemon, CronDaemon>();
         }
 
-        static void Run(IServiceProvider provider)
+        public void RunOne(string id)
+        {
+            var settings = provider.GetRequiredService<IOptions<BackupSettings>>().Value;
+
+            var backupSettings = settings.BackupDatabases.SingleOrDefault(x => x.Id == id);
+            if (backupSettings == null)
+                throw new InvalidOperationException($"Id: {id} not found");
+
+            var setup = new PipelineSetup();
+            BuildStage(setup, backupSettings);
+
+            var pipelineManager = provider.GetService<PipelineManger>();
+            pipelineManager.Execute(setup, default(CancellationToken)).ConfigureAwait(true).GetAwaiter().GetResult();
+        }
+
+        public void RunInCron()
         {
             var settings = provider.GetRequiredService<IOptions<BackupSettings>>().Value;
             var cronDeamon = provider.GetRequiredService<ICronDaemon>();
@@ -82,12 +149,6 @@ namespace BackupManager
 
             foreach (var item in settings.BackupDatabases)
             {
-                var setup = new PipelineSetup();
-                BuildStage(setup, item);
-
-                var pipelineManager = provider.GetService<PipelineManger>();
-                pipelineManager.Execute(setup, default(CancellationToken)).ConfigureAwait(true);
-
                 cronDeamon.AddJob(item.Cron, async () =>
                 {
                     var setup = new PipelineSetup();

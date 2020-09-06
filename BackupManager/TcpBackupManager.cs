@@ -86,10 +86,17 @@ namespace BackupManager
 
         public void Dispose()
         {
-            _networkStream.Close();
-            _tcpClient.Close();
+            if(_networkStream != null)
+            {
+                _networkStream.Close();
+                _networkStream.Dispose();
+            }
 
-            _tcpClient.Dispose();
+            if (_tcpClient != null)
+            {
+                _tcpClient.Close();
+                _tcpClient.Dispose();
+            }
 
             _logger.LogInformation("Close tcp connection");
         }
