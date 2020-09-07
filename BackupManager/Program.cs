@@ -22,6 +22,8 @@ namespace BackupManager
 
         static void Main(string[] args)
         {
+            string runOneBackup = null;
+
             var rc = HostFactory.Run(cfg =>
             {
                 cfg.SetDisplayName("Database Backup");
@@ -30,10 +32,27 @@ namespace BackupManager
                 cfg.Service<Wrapper>(s =>
                 {
                     s.ConstructUsing(x => new Wrapper());
-                    s.WhenStarted(x => { x.Start(); x.RunInCron(); });
+                    s.WhenStarted(x => { 
+                        x.Start();
+
+                        if (string.IsNullOrEmpty(runOneBackup))
+                        {
+                            x.RunInCron();
+                        }
+                        else
+                        {
+                            x.RunOne(runOneBackup);
+                            Environment.Exit(-1);
+                        }
+                    });
                     s.WhenStopped(x => x.Stop());
                 });
                 cfg.StartAutomatically();
+
+                cfg.AddCommandLineDefinition("r", x =>
+                {
+                    runOneBackup = x;
+                }); 
             });
 
             var exitCode = (int)Convert.ChangeType(rc, rc.GetTypeCode());  //11
