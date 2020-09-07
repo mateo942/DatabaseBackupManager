@@ -2,12 +2,12 @@
 using BackupManager.Notification;
 using BackupManager.Pipelines;
 using BackupManager.Settings;
-using CommandLine;
 using MediatR;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -22,39 +22,22 @@ namespace BackupManager
 
         static void Main(string[] args)
         {
-            Parser.Default.ParseArguments<Options>(args)
-                .WithParsed<Options>(opt =>
-              {
-                  if (string.IsNullOrEmpty(opt.BackupId))
-                  {
-                      if (opt.RunAsService)
-                      {
-                          HostFactory.Run(cfg =>
-                          {
-                              cfg.SetDisplayName("Database Backup");
-                              cfg.SetDescription("Database Backup");
-                              cfg.SetServiceName("Database Backup");
-                              cfg.Service<Wrapper>(s =>
-                              {
-                                  s.ConstructUsing(x => new Wrapper());
-                                  s.WhenStarted(x => { x.Start(); x.RunInCron(); });
-                                  s.WhenStopped(x => x.Stop());
-                              });
+            var rc = HostFactory.Run(cfg =>
+            {
+                cfg.SetDisplayName("Database Backup");
+                cfg.SetDescription("Database Backup");
+                cfg.SetServiceName("Database Backup");
+                cfg.Service<Wrapper>(s =>
+                {
+                    s.ConstructUsing(x => new Wrapper());
+                    s.WhenStarted(x => { x.Start(); x.RunInCron(); });
+                    s.WhenStopped(x => x.Stop());
+                });
+                cfg.StartAutomatically();
+            });
 
-                              cfg.AddCommandLineDefinition("s", x => { });
-                          });
-                      } else
-                      {
-                          new Wrapper().Start().RunInCron();
-
-                          if (Environment.UserInteractive)
-                              Console.ReadKey(true);
-                      }
-                  } else
-                  {
-                      new Wrapper().Start().RunOne(opt.BackupId);
-                  }
-              });
+            var exitCode = (int)Convert.ChangeType(rc, rc.GetTypeCode());  //11
+            Environment.ExitCode = exitCode;
         }
     }
 
@@ -108,6 +91,8 @@ namespace BackupManager
             {
                 cfg.SetMinimumLevel(LogLevel.Trace);
                 cfg.AddConsole();
+                cfg.AddSerilog();
+                cfg.AddFile(configuration.GetSection("Logging"));
             });
             serviceCollection.AddTransient<MsSQLBackupPipeline>();
             serviceCollection.AddTransient<ZipPipeline>();
@@ -118,9 +103,6 @@ namespace BackupManager
             serviceCollection.AddTransient<MoveFilePipeline>();
 
             serviceCollection.AddTransient<DumpNotificationHandler>();
-
-            serviceCollection.AddSingleton<TcpBackupManager>();
-            serviceCollection.AddSingleton<TcpMessageHandler>();
 
             serviceCollection.AddSingleton<PipelineManger>();
             serviceCollection.AddSingleton<ICronDaemon, CronDaemon>();

@@ -2,8 +2,8 @@
   "BackupSettings": {
     "BackupDatabases": [
       {
-        "Id":  "back_1",
-        "ConnectionString": "Server=.;Database=APP_MASTER;Trusted_Connection=True;",
+        "Id": "back_1",
+        "ConnectionString": "Server=.;Database=APP_MASTER;User Id=sa;Password=;",
         "Name": "App_MASTER",
         "OutputDirectory": "F:\\TestBackup\\diff",
         "Pipeline": [ "BACKUP", "ZIP", "DELETE_FILE", "DELETE_OLD_FILE", "MAIL", "MOVE" ],
@@ -27,7 +27,7 @@
       },
       {
         "Id": "back_2",
-        "ConnectionString": "Server=.;Database=APP_MASTER;Trusted_Connection=True;",
+        "ConnectionString": "Server=.;Database=APP_MASTER;User Id=sa;Password=;",
         "Name": "App_MASTER",
         "OutputDirectory": "F:\\TestBackup\\full",
         "Pipeline": [ "BACKUP", "ZIP", "DELETE_FILE", "DELETE_OLD_FILE", "MAIL" ],
@@ -47,5 +47,13 @@
         }
       }
     ]
+  },
+  "Logging": {
+    "PathFormat": "Logs/log-{Date}.txt",
+    "OutputTemplate": "{Timestamp:o} [{Level:u3}] {Message}  {Properties:j}{NewLine}{Exception}",
+    "IncludeScopes": true,
+    "LogLevel": {
+      "Default": "Trace"
+    }
   }
 }
