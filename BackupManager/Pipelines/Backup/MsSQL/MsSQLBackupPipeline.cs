@@ -73,6 +73,12 @@ namespace BackupManager.Pipelines
         {
             try
             {
+                if (Directory.Exists(command.OutputDirectory) == false)
+                {
+                    Directory.CreateDirectory(command.OutputDirectory);
+                    _logger.LogInformation("Created directory");
+                }
+
                 _logger.LogInformation("Connectig to server...");
                 await _mediator.Send(NotificationRequest.Send(MsSQLNotification.StartBackup(command.Name, command.Type)));
 
