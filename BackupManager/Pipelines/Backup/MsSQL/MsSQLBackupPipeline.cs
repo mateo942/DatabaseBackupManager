@@ -1,7 +1,9 @@
-﻿using BackupManager.Notification;
+﻿using BackupManager.Helpers;
+using BackupManager.Notification;
 using BackupManager.Settings;
 using MediatR;
 using Microsoft.Extensions.Logging;
+using Pipeline;
 using System;
 using System.Collections.Generic;
 using System.Data.SqlClient;
@@ -58,8 +60,23 @@ namespace BackupManager.Pipelines
         }
     }
 
-    public class MsSQLBackupPipeline : PipelineBase<BackupDatabase>
+    public class BackupCommand : IPipelineCommand
     {
+        public string ConnectionString { get; set; }
+        public string DatabaseName { get; set; }
+        public BackupType BackupType { get; set; }
+    }
+
+    public enum BackupType
+    {
+        Full,
+        Diff
+    }
+
+    public class MsSQLBackupPipeline : IPipeline<BackupCommand>
+    {
+        const string OUTPUT_BAK = "OUTPUT_BAK";
+
         private readonly ILogger<MsSQLBackupPipeline> _logger;
         private readonly IMediator _mediator;
 
@@ -69,18 +86,15 @@ namespace BackupManager.Pipelines
             _mediator = mediator;
         }
 
-        public async override Task Execute(BackupDatabase command, Variables variables, CancellationToken cancellationToken)
+        public async Task Execute(BackupCommand command, PipelineContext pipelineContext, CancellationToken cancellationToken)
         {
+            var outputBackupPath = pipelineContext.LocalVariables.Get<string>(OUTPUT_BAK);
+            outputBackupPath = DirectoryHelper.GetAbsolutePath(pipelineContext, outputBackupPath);
+
             try
             {
-                if (Directory.Exists(command.OutputDirectory) == false)
-                {
-                    Directory.CreateDirectory(command.OutputDirectory);
-                    _logger.LogInformation("Created directory");
-                }
-
                 _logger.LogInformation("Connectig to server...");
-                await _mediator.Send(NotificationRequest.Send(MsSQLNotification.StartBackup(command.Name, command.Type)));
+                await _mediator.Send(NotificationRequest.Send(MsSQLNotification.StartBackup(command.DatabaseName, command.BackupType)));
 
                 using (var sqlConnection = new SqlConnection(command.ConnectionString))
                 {
@@ -91,21 +105,16 @@ namespace BackupManager.Pipelines
                     _logger.LogInformation("Connected");
                     _logger.LogInformation("Creating backup...");
 
-                    var now = DateTime.Now;
-                    string name = string.Format("{0}_{1}", command.Name, now.ToString("yyyyMMdd_hhmmss"));
+                    string name = PathHelper.GetPathWithVariable(pipelineContext, outputBackupPath);
 
                     string type = string.Empty;
-                    if (command.Type == BackupType.Diff)
+                    if (command.BackupType == BackupType.Diff)
                     {
                         type = "DIFFERENTIAL, ";
                     }
 
-                    var outputPath = Path.Combine(command.OutputDirectory, name + ".bak");
-
-                    variables.SetBackupPath(outputPath);
-
                     var sqlCommand = string.Format("BACKUP DATABASE [{0}] TO DISK = '{1}' WITH {4} NOFORMAT, DESCRIPTION = '{2}', NAME = '{3}', STATS = 5",
-                                command.Name, outputPath, "AutoBackup", name, type);
+                                command.DatabaseName, name, "AutoBackup", DateTime.Now.ToShortDateString(), type);
 
                     using (var cmd = new SqlCommand(
                             sqlCommand,
@@ -116,7 +125,7 @@ namespace BackupManager.Pipelines
                     }
 
                     _logger.LogInformation("Backup created: {0}", name);
-                    await _mediator.Send(NotificationRequest.Send(MsSQLNotification.EndBackup(command.Name, command.Type)));
+                    await _mediator.Send(NotificationRequest.Send(MsSQLNotification.EndBackup(command.DatabaseName, command.BackupType)));
 
                     sqlConnection.InfoMessage -= SqlConnection_InfoMessage;
                     sqlConnection.FireInfoMessageEventOnUserErrors = false;
@@ -124,14 +133,12 @@ namespace BackupManager.Pipelines
                     _logger.LogInformation("Closing connection...");
                     await sqlConnection.CloseAsync();
                     _logger.LogInformation("Closed");
-
-                    variables.AddFilesToUpload(outputPath);
                 }
             }
             catch (Exception ex)
             {
-                await _mediator.Send(NotificationRequest.Send(MsSQLNotification.ErrorBackup(command.Name, command.Type, ex)));
-                _logger.LogError(ex, $"Error backup database: '{command.Name}'");
+                await _mediator.Send(NotificationRequest.Send(MsSQLNotification.ErrorBackup(command.DatabaseName, command.BackupType, ex)));
+                _logger.LogError(ex, $"Error backup database: '{command.DatabaseName}'");
 
                 throw;
             }

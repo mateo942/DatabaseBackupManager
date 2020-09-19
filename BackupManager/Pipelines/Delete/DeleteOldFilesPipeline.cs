@@ -1,4 +1,5 @@
 ﻿using BackupManager.Settings;
+using Pipeline;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -9,22 +10,46 @@ using System.Threading.Tasks;
 
 namespace BackupManager.Pipelines
 {
-    public class DeleteOldFilesPipeline : PipelineBase<BackupDatabase>
+    public class DeleteOldFilesPipeline : IPipeline
     {
-        public override Task Execute(BackupDatabase command, Variables variables, CancellationToken cancellationToken)
+        const string EXPIRE_DAYS = "EXPIRE_DAYS";
+        const string EXPIRE_HOURS = "EXPIRE_HOURS";
+        const string DIRECTORIES_TO_DELETE = "DIRECTORIES_TO_DELETE";
+
+
+        public Task Execute(PipelineContext pipelineContext, CancellationToken cancellationToken)
         {
-            if (command.FileExpireDays == 0)
-                return Task.CompletedTask;
+            var now = DateTime.Now;
+            var expireDate = now.AddDays(-128);
 
-            var expireDate = DateTime.UtcNow.AddDays(command.FileExpireDays * -1);
-
-            var files = Directory.GetFiles(command.OutputDirectory);
-            Parallel.ForEach(files, file =>
+            if (pipelineContext.LocalVariables.TryGet(EXPIRE_DAYS, out int expDays))
             {
-                var creationDate = File.GetCreationTime(file);
-                if (creationDate < expireDate)
-                    File.Delete(file);
-            });
+                expireDate = now.AddDays(expDays * -1);
+            }
+            else if (pipelineContext.LocalVariables.TryGet(EXPIRE_HOURS, out int expHours))
+            {
+                expireDate = now.AddDays(expDays * -1);
+            }
+
+            if (pipelineContext.LocalVariables.TryGetEnumerate(DIRECTORIES_TO_DELETE, out IEnumerable<string> directoriesToDelete))
+            {
+                if (directoriesToDelete != null)
+                {
+                    foreach (var item in directoriesToDelete)
+                    {
+                        if (!Directory.Exists(item))
+                            continue;
+
+                        var files = Directory.GetFiles(item);
+                        Parallel.ForEach(files, file =>
+                        {
+                            var creationDate = File.GetCreationTime(file);
+                            if (creationDate < expireDate)
+                                File.Delete(file);
+                        });
+                    }
+                }
+            }
 
             return Task.CompletedTask;
         }

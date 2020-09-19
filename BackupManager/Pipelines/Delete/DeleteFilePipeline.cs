@@ -1,4 +1,6 @@
-﻿using BackupManager.Settings;
+﻿using BackupManager.Helpers;
+using BackupManager.Settings;
+using Pipeline;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -9,18 +11,31 @@ using System.Threading.Tasks;
 
 namespace BackupManager.Pipelines
 {
-    public class DeleteFilePipeline : PipelineBase<BackupDatabase>
+    public class DeleteFilePipeline : IPipeline
     {
-        public override Task Execute(BackupDatabase command, Variables variables, CancellationToken cancellationToken)
+        const string FILES_TO_DELETE = "FILES_TO_DELETE";
+
+        public Task Execute(PipelineContext pipelineContext, CancellationToken cancellationToken)
         {
-            var filesToDelete = variables.GetFilesToDelete();
-            if(filesToDelete != null)
+            if(pipelineContext.LocalVariables.TryGetEnumerate(FILES_TO_DELETE, out IEnumerable<string> filesToDelete))
             {
-                Parallel.ForEach(filesToDelete, x =>
+                if (filesToDelete != null)
                 {
-                    if (File.Exists(x))
-                        File.Delete(x);
-                });
+                    Parallel.ForEach(filesToDelete, x =>
+                    {
+                        var absolutePath = DirectoryHelper.GetAbsolutePath(pipelineContext, x);
+                        if (DirectoryHelper.IsDir(absolutePath))
+                        {
+                            if (Directory.Exists(absolutePath))
+                                Directory.Delete(absolutePath, true);
+                        }
+                        else {
+                            if (File.Exists(absolutePath))
+                                File.Delete(absolutePath);
+                        }
+                        
+                    });
+                }
             }
 
             return Task.CompletedTask;

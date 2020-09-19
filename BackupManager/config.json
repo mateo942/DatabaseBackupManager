@@ -1,53 +1,4 @@
 ﻿{
-  "BackupSettings": {
-    "BackupDatabases": [
-      {
-        "Id": "back_1",
-        "ConnectionString": "Server=.;Database=APP_MASTER;User Id=sa;Password=;",
-        "Name": "App_MASTER",
-        "OutputDirectory": "F:\\TestBackup\\diff",
-        "Pipeline": [ "BACKUP", "ZIP", "DELETE_FILE", "DELETE_OLD_FILE", "MAIL", "MOVE" ],
-        "Type": 1,
-        "Cron": "* * * * *",
-        "Variables": {
-          "move_files_to": "F:\\TestBackup"
-        },
-        "BackupProvider": {
-          "FtpProvider": {},
-          "TcpProvider": {},
-          "MailProvider": {
-            "Host": "smtp.mailtrap.io",
-            "Port": 587,
-            "Username": "",
-            "Password": "",
-            "FromMail": "example@backupapp.com",
-            "ToMail": "example@backupapp.com"
-          }
-        }
-      },
-      {
-        "Id": "back_2",
-        "ConnectionString": "Server=.;Database=APP_MASTER;User Id=sa;Password=;",
-        "Name": "App_MASTER",
-        "OutputDirectory": "F:\\TestBackup\\full",
-        "Pipeline": [ "BACKUP", "ZIP", "DELETE_FILE", "DELETE_OLD_FILE", "MAIL" ],
-        "Type": 0,
-        "Cron": "*/2 * * * *",
-        "BackupProvider": {
-          "FtpProvider": {},
-          "TcpProvider": {},
-          "MailProvider": {
-            "Host": "smtp.mailtrap.io",
-            "Port": 587,
-            "Username": "",
-            "Password": "",
-            "FromMail": "example@backupapp.com",
-            "ToMail": "example@backupapp.com"
-          }
-        }
-      }
-    ]
-  },
   "Logging": {
     "PathFormat": "Logs/log-{Date}.txt",
     "OutputTemplate": "{Timestamp:o} [{Level:u3}] {Message}  {Properties:j}{NewLine}{Exception}",
@@ -55,5 +6,118 @@
     "LogLevel": {
       "Default": "Trace"
     }
-  }
+  },
+  "Pipelines": [
+    {
+      "Name": "backup1",
+      "Variables": {
+        "TEMP_PATH": "F:\\TestBackup"
+      },
+      "DeleteWorkingDir": true,
+      "Steps": [
+        {
+          "Name": "BACKUP",
+          "Variables": {
+            "OUTPUT_BAK": "backup_{Date}.bak"
+          },
+          "Command": {
+            "ConnectionString": "Server=.;Database=APP_MASTER;User Id=sa;Password=;",
+            "DatabaseName": "APP_MASTER",
+            "BackupType": 0
+          }
+        },
+        {
+          "Name": "ZIP",
+          "Variables": {
+            "FILES_TO_ZIP": "backup_{Date}.bak",
+            "OUTPUT_FILE": "full_{Date}.zip"
+          }
+        },
+        {
+          "Name": "DELETE_FILE",
+          "Variables": {
+            "FILES_TO_DELETE": "a"
+          }
+        },
+        {
+          "Name": "DELETE_OLD_FILE",
+          "Variables": {
+            "EXPIRE_DAYS": 5,
+            "DIRECTORIES_TO_DELETE": "F:\\\\TestBackup\\output"
+          }
+        },
+        {
+          "Name": "MOVE",
+          "Variables": {
+            "FILES_TO_MOVE": "full_{Date}.zip",
+            "OUTPUT_PATH": "F:\\\\TestBackup\\output"
+          }
+        },
+        {
+          "Name": "MAIL",
+          "Variables": {
+            "MAIL_HOST": "smtp.mailtrap.io",
+            "MAIL_PORT": 587,
+            "MAIL_USERNAME": "sss",
+            "MAIL_PASSWORD": "sss",
+            "MAIL_FROM": "example@backupapp.com",
+            "MAIL_TO": "example@backupapp.com"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "backup2",
+      "Variables": {
+        "TEMP_PATH": "F:\\TestBackup",
+        "MAIL_HOST": "smtp.mailtrap.io",
+        "MAIL_PORT": 587,
+        "MAIL_USERNAME": "sss",
+        "MAIL_PASSWORD": "sss",
+        "MAIL_FROM": "example@backupapp.com",
+        "MAIL_TO": "example@backupapp.com"
+      },
+      "DeleteWorkingDir": true,
+      "Steps": [
+        {
+          "Name": "BACKUP",
+          "Variables": {
+            "OUTPUT_BAK": "backup_diff_{Date}.bak"
+          },
+          "Command": {
+            "ConnectionString": "Server=.;Database=APP_MASTER;User Id=sa;Password=;",
+            "DatabaseName": "APP_MASTER",
+            "BackupType": 1
+          }
+        },
+        {
+          "Name": "ZIP",
+          "Variables": {
+            "FILES_TO_ZIP": "backup_diff_{Date}.bak",
+            "OUTPUT_FILE": "diff_{Date}.zip"
+          }
+        },
+        {
+          "Name": "DELETE_OLD_FILE",
+          "Variables": {
+            "EXPIRE_DAYS": 5,
+            "DIRECTORIES_TO_DELETE": "F:\\\\TestBackup\\output"
+          }
+        },
+        {
+          "Name": "MOVE",
+          "Variables": {
+            "FILES_TO_MOVE": "diff_{Date}.zip",
+            "OUTPUT_PATH": "F:\\\\TestBackup\\output"
+          }
+        },
+        {
+          "Name": "MAIL",
+          "Variables": {
+            
+          }
+        }
+      ]
+    }
+  ]
 }

@@ -1,66 +1,28 @@
-﻿using BackupManager.Cron;
+﻿using BackupManager.Helpers;
 using BackupManager.Notification;
 using BackupManager.Pipelines;
-using BackupManager.Settings;
 using MediatR;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Pipeline;
+using Pipeline.DependencyInjection;
 using Serilog;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
+using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using Topshelf;
 
 namespace BackupManager
 {
     class Program
-    {
-
-        static void Main(string[] args)
-        {
-            string runOneBackup = null;
-
-            var rc = HostFactory.Run(cfg =>
-            {
-                cfg.SetDisplayName("Database Backup");
-                cfg.SetDescription("Database Backup");
-                cfg.SetServiceName("Database Backup");
-                cfg.Service<Wrapper>(s =>
-                {
-                    s.ConstructUsing(x => new Wrapper());
-                    s.WhenStarted(x => { 
-                        x.Start();
-
-                        if (string.IsNullOrEmpty(runOneBackup))
-                        {
-                            x.RunInCron();
-                        }
-                        else
-                        {
-                            x.RunOne(runOneBackup);
-                            Environment.Exit(-1);
-                        }
-                    });
-                    s.WhenStopped(x => x.Stop());
-                });
-                cfg.StartAutomatically();
-
-                cfg.AddCommandLineDefinition("r", x =>
-                {
-                    runOneBackup = x;
-                }); 
-            });
-
-            var exitCode = (int)Convert.ChangeType(rc, rc.GetTypeCode());  //11
-            Environment.ExitCode = exitCode;
-        }
-    }
-
-    class Wrapper
     {
         readonly static IDictionary<string, Type> _pipelines = new Dictionary<string, Type>()
         {
@@ -73,14 +35,7 @@ namespace BackupManager
             { "MOVE", typeof(MoveFilePipeline) }
         };
 
-        private ServiceProvider provider;
-
-        public Wrapper()
-        {
-
-        }
-
-        public Wrapper Start()
+        static async Task Main(string[] args)
         {
             var configuration = new ConfigurationBuilder()
                .AddJsonFile("config.json", false)
@@ -89,22 +44,45 @@ namespace BackupManager
             var serviceCollection = new ServiceCollection();
             Configure(serviceCollection, configuration);
 
-            provider = serviceCollection.BuildServiceProvider();
+            var provider = serviceCollection.BuildServiceProvider();
 
-            return this;
+            //Run pipeline
+            using (var scope = provider.CreateScope())
+            {
+                var pipelineManager = scope.ServiceProvider.GetRequiredService<IPipelineManager>();
+
+                var pipelines = provider.GetRequiredService<IOptions<List<Settings.PipelineSettings>>>();
+                foreach (var pipeline in pipelines.Value)
+                {
+                    var pipelineConfiguration = new PipelineConfiguration();
+                    pipelineConfiguration.AddAlwaysEnd(x =>
+                    {
+                        if (pipeline.DeleteWorkingDir)
+                        {
+                            var workingDir = DirectoryHelper.GetWorkingDir(x);
+                            Directory.Delete(workingDir, true);
+                        }
+                    });
+                    pipelineConfiguration.AddGlobalVariables(pipeline.Variables);
+
+                    ConfigureByStep(pipelineConfiguration, pipeline);
+
+                    await pipelineManager.Configure(pipelineConfiguration).Run();
+                }
+            }
+
+            
+
+            await provider.DisposeAsync();
         }
 
-        public void Stop()
-        {
-            provider.Dispose();
-        }
-
-        void Configure(ServiceCollection serviceCollection, IConfigurationRoot configuration)
+        static void Configure(ServiceCollection serviceCollection, IConfigurationRoot configuration)
         {
             serviceCollection.AddMediatR(typeof(Program).Assembly);
 
+            serviceCollection.AddPipeline();
             serviceCollection.AddOptions();
-            serviceCollection.Configure<BackupSettings>(configuration.GetSection("BackupSettings"));
+            serviceCollection.Configure<List<Settings.PipelineSettings>>(configuration.GetSection("Pipelines"));
 
             serviceCollection.AddLogging(cfg =>
             {
@@ -122,59 +100,31 @@ namespace BackupManager
             serviceCollection.AddTransient<MoveFilePipeline>();
 
             serviceCollection.AddTransient<DumpNotificationHandler>();
-
-            serviceCollection.AddSingleton<PipelineManger>();
-            serviceCollection.AddSingleton<ICronDaemon, CronDaemon>();
         }
 
-        public void RunOne(string id)
+        static PipelineConfiguration ConfigureByStep(PipelineConfiguration cfg, Settings.PipelineSettings pipelineSettings)
         {
-            var settings = provider.GetRequiredService<IOptions<BackupSettings>>().Value;
-
-            var backupSettings = settings.BackupDatabases.SingleOrDefault(x => x.Id == id);
-            if (backupSettings == null)
-                throw new InvalidOperationException($"Id: {id} not found");
-
-            var setup = new PipelineSetup();
-            BuildStage(setup, backupSettings);
-
-            var pipelineManager = provider.GetService<PipelineManger>();
-            pipelineManager.Execute(setup, default(CancellationToken)).ConfigureAwait(true).GetAwaiter().GetResult();
-        }
-
-        public void RunInCron()
-        {
-            var settings = provider.GetRequiredService<IOptions<BackupSettings>>().Value;
-            var cronDeamon = provider.GetRequiredService<ICronDaemon>();
-            cronDeamon.Start();
-
-            foreach (var item in settings.BackupDatabases)
+            foreach (var item in pipelineSettings.Steps)
             {
-                cronDeamon.AddJob(item.Cron, async () =>
+                var pipelineType = _pipelines[item.Name];
+                var variables = new Variables();
+                variables.AddRange(item.Variables);
+
+                var interfaceWithCommand = pipelineType.GetInterface(typeof(IPipeline<>).Name);
+                if (interfaceWithCommand != null)
                 {
-                    var setup = new PipelineSetup();
-                    BuildStage(setup, item);
+                    var genericType = interfaceWithCommand.GetGenericArguments()[0];
+                    var command = item.Command.Get(genericType);
 
-                    var pipelineManager = provider.GetService<PipelineManger>();
-                    await pipelineManager.Execute(setup, default(CancellationToken));
-                });
-            }
-        }
-
-        static PipelineSetup BuildStage(PipelineSetup pipelineSetup, BackupDatabase settings)
-        {
-            pipelineSetup.AddVariables(settings.Variables);
-
-            foreach (var item in settings.Pipeline)
-            {
-                if (_pipelines.ContainsKey(item) == false)
-                    throw new InvalidOperationException("Invalid pipeline name");
-
-                var pipeline = _pipelines[item];
-                pipelineSetup.AddStage(pipeline, settings);
+                    cfg.NextStep(pipelineType, variables, (IPipelineCommand)command);
+                }
+                else
+                {
+                    cfg.NextStep(pipelineType, variables);
+                }
             }
 
-            return pipelineSetup;
+            return cfg;
         }
     }
 }
